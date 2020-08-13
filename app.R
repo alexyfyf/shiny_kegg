@@ -115,6 +115,12 @@ ui <- fluidPage(
     tabPanel(
       "FAQ",
       includeMarkdown("manual.md")
+    ),
+    
+    tabPanel(
+      "Logs",
+      textOutput("num"),
+      includeMarkdown("updates.md")
     )
   )
   
@@ -331,16 +337,16 @@ server <- function(input, output, session) {
   
   ## counters
   ## permission issue
-  # output$num <- renderText({
-  #   if (!file.exists("counter.RData")) {
-  #     counter <- 0
-  #   } else
-  #     load(file = "counter.RData")
-  #   counter <- counter + 1
-  #   save(counter, file = "counter.RData")
-  #   paste0("You are the ", counter)
-  # })
-  
+  output$num <- renderText({
+    if (!file.exists("data/counter.RData")) {
+      counter <- 0
+    } else
+      load(file = "data/counter.RData")
+    counter <- counter + 1
+    save(counter, file = "data/counter.RData")
+    paste0("You are the ", counter, " visitors.")
+  })
+
 }
 
 shinyApp(ui, server)

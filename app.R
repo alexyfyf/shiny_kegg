@@ -16,6 +16,7 @@ library(svglite)
 
 ui <- fluidPage(
   # titlePanel("some text"),
+  tags$head(includeHTML(("google_analytics.html"))),
   
   navbarPage(
     "KEGG pathway analysis and visualization",
@@ -38,6 +39,7 @@ ui <- fluidPage(
                     label = "Choose a species:",
                     choices = c("Human"= "hsa", "Mouse"="mmu")),
         br(),
+        h2("Parameters for analysis"),
         sliderInput(inputId = "pval", 
                     label = "KEGG p value cutoff",
                     min = 0, max = 1, 
@@ -49,7 +51,9 @@ ui <- fluidPage(
         selectInput(inputId = "padjMethod",
                     label = "Choose a p adjustment method:",
                     choices = c("None"= "none", "Benjamini-Hochberg"="BH")),
+        actionButton("run", "Run!"), ## input won't be analyzed immediately
         br(),
+        h2("Parameters for plotting"),
         selectInput(inputId = "x",
                     label = "Choose X axis:",
                     choices = c("GeneRatio"="GeneRatio", "Count"="Count")),
@@ -118,10 +122,16 @@ ui <- fluidPage(
     ),
     
     tabPanel(
+      "SessionInfo",
+      verbatimTextOutput("sessionInfo")
+    ),
+    
+    tabPanel(
       "Logs",
       textOutput("num"),
       includeMarkdown("updates.md")
     )
+    
   )
   
   
@@ -131,7 +141,18 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  df <- reactive({
+  ## counters
+  output$num <- renderText({
+    if (!file.exists("data/counter.RData")) {
+      counter <- 0
+    } else
+      load(file = "data/counter.RData")
+    counter <- counter + 1
+    save(counter, file = "data/counter.RData")
+    paste0("You are the ", counter, " visitors.")
+  })
+  
+  df <- eventReactive(input$run, {
     shiny::validate(
       need(input$genelist, "Upload a file!")
     )
@@ -140,16 +161,16 @@ server <- function(input, output, session) {
     return(df)
   })
   
-  org <- reactive({
+  org <- eventReactive(input$run, {
     org <- ifelse(input$species=="hsa","org.Hs.eg.db","org.Mm.eg.db")
   })
   
-  id <- reactive({
+  id <- eventReactive(input$run, {
     id <- bitr(df()$X1, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org())
     return(id)
   })
   
-  fc <- reactive({
+  fc <- eventReactive(input$run, {
     if(ncol(df())==2){
       fc <- df()$X2[match(id()$SYMBOL, df()$X1)]
       names(fc) <- id()$ENTREZID
@@ -159,7 +180,7 @@ server <- function(input, output, session) {
     
   })
   
-  kegg <- reactive({
+  kegg <- eventReactive(input$run, {
     kegg <- enrichKEGG(id()$ENTREZID, organism = input$species, 
                        pvalueCutoff = input$pval, 
                        pAdjustMethod = input$padjMethod,
@@ -170,11 +191,11 @@ server <- function(input, output, session) {
     return(kegg)
   })
   
-  reactome_sp <- reactive({
+  reactome_sp <- eventReactive(input$run, {
     reactome_sp <- ifelse(input$species=="hsa","human","mouse")
   })
   
-  reactome <- reactive({
+  reactome <- eventReactive(input$run, {
     reactome <- enrichPathway(id()$ENTREZID, organism = reactome_sp(), 
                               pvalueCutoff = input$pval, 
                               pAdjustMethod = input$padjMethod,
@@ -335,23 +356,14 @@ server <- function(input, output, session) {
   #   }
   # )
   
-  ## counters
-  ## permission issue
-  output$num <- renderText({
-    if (!file.exists("data/counter.RData")) {
-      counter <- 0
-    } else
-      load(file = "data/counter.RData")
-    counter <- counter + 1
-    save(counter, file = "data/counter.RData")
-    paste0("You are the ", counter, " visitors.")
+  output$sessionInfo <- renderText({
+    paste(capture.output(sessionInfo()),
+          collapse = "\n")
   })
-
+  
 }
 
 shinyApp(ui, server)
-
-
 
 
 
